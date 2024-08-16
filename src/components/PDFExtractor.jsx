@@ -1,22 +1,20 @@
 import { useState, useEffect } from 'react';
-import * as pdfjsLib from 'pdfjs-dist'
+import * as pdfjsLib from 'pdfjs-dist';
 
-const generateCSV = (invoiceDetails) => {
+const generateCSV = (invoiceDetailsArray) => {
   const headers = ['Factura Number', 'Fecha', 'Subtotal', 'IVA', 'IIBB', 'Total'];
-  const rows = [
-    [
+  let csvContent = 'data:text/csv;charset=utf-8,';
+  csvContent += headers.join(',') + '\n';
+
+  invoiceDetailsArray.forEach(invoiceDetails => {
+    const row = [
       invoiceDetails.facturaNumber,
       invoiceDetails.fecha,
       invoiceDetails.subtotal,
       invoiceDetails.iva,
       invoiceDetails.iibb,
       invoiceDetails.total,
-    ],
-  ];
-
-  let csvContent = 'data:text/csv;charset=utf-8,';
-  csvContent += headers.join(',') + '\n';
-  rows.forEach(row => {
+    ];
     csvContent += row.join(',') + '\n';
   });
 
@@ -40,17 +38,11 @@ const extractInvoiceDetails = (text) => {
 
   const facturaNumber = facturaMatch ? `${facturaMatch[2]}-${facturaMatch[1]}` : null;
   const fecha = fechaMatch ? fechaMatch[0] : null;
-  // const total = totalMatches && totalMatches.length > 1 ? totalMatches[totalMatches.length - 6] : null;
-  // const total = totalMatches
-  // extract last 5 matches of totalMatches
   const lastMatchedNumbers = totalMatches && totalMatches.length > 1 ? totalMatches.slice(-7) : null;
 
   const iva = lastMatchedNumbers ? lastMatchedNumbers[0] : null;
-
   const subtotal = lastMatchedNumbers ? lastMatchedNumbers[4] : null;
-
   const iibb = lastMatchedNumbers ? lastMatchedNumbers[5] : null;
-
   const total = lastMatchedNumbers ? lastMatchedNumbers[1] : null;
 
   return {
@@ -62,9 +54,10 @@ const extractInvoiceDetails = (text) => {
     total,
   };
 };
+
 const PDFExtractor = () => {
-  const [file, setFile] = useState(null);
-  const [extractedData, setExtractedData] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [extractedData, setExtractedData] = useState([]);
 
   useEffect(() => {
     const loadWorker = async () => {
@@ -75,11 +68,13 @@ const PDFExtractor = () => {
   }, []);
 
   const handleFileChange = (event) => {
-    setFile(event.target.files[0]);
+    setFiles(Array.from(event.target.files));
   };
 
   const handleExtractData = async () => {
-    if (file) {
+    const extractedDetailsArray = [];
+
+    for (const file of files) {
       const reader = new FileReader();
       reader.onload = async function () {
         const typedArray = new Uint8Array(this.result);
@@ -93,13 +88,12 @@ const PDFExtractor = () => {
         }
 
         const invoiceDetails = extractInvoiceDetails(text);
+        extractedDetailsArray.push(invoiceDetails);
 
-        // setExtractedText(JSON.stringify(invoiceDetails));
-        // setExtractedText(text)
-
-        setExtractedData(invoiceDetails);
-
-        generateCSV(invoiceDetails);
+        if (extractedDetailsArray.length === files.length) {
+          setExtractedData(extractedDetailsArray);
+          generateCSV(extractedDetailsArray);
+        }
       };
       reader.readAsArrayBuffer(file);
     }
@@ -107,13 +101,13 @@ const PDFExtractor = () => {
 
   return (
     <div className='flex flex-col items-center p-20'>
-      <input type="file" accept="application/pdf" onChange={handleFileChange} />
+      <input type="file" accept="application/pdf" multiple onChange={handleFileChange} />
       <button onClick={handleExtractData} className='mt-4 p-2 bg-blue-500 text-white'>
         Extract Data
       </button>
 
       {
-        extractedData && (
+        extractedData.length > 0 && (
           <div className='mt-4 flex flex-col gap-16'>
             <pre>{JSON.stringify(extractedData, null, 2)}</pre>
           </div>
